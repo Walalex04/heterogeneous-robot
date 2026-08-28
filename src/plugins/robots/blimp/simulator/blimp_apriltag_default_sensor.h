@@ -18,7 +18,7 @@ namespace argos {
 #include <argos3/core/utility/math/vector3.h>
 #include <argos3/core/utility/math/quaternion.h>
 #include <argos3/core/utility/math/angles.h>
-#include <argos3/plugins/robots/blimp/control_interface/ci_blimp_apriltag_sensor.h>
+#include "../control_interface/ci_blimp_apriltag_sensor.h"
 
 namespace argos {
 

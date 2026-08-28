@@ -33,9 +33,16 @@ if(POLICY CMP0042)
 endif(POLICY CMP0042)
 
 #
-# Include path points to the base source dir
+# Include paths:
+# Se añaden CMAKE_SOURCE_DIR/src y CMAKE_SOURCE_DIR/plugins para que
+# las rutas tipo <argos3/plugins/robots/blimp/...> se resuelvan correctamente.
 #
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+include_directories(
+  ${CMAKE_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/plugins
+  ${CMAKE_BINARY_DIR}
+)
 
 #
 # Make sure we are under Unix

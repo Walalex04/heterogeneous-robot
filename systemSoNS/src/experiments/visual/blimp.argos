@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<argos-configuration>
+   <framework>
+      <system threads="0" />
+      <experiment length="30" ticks_per_second="10" random_seed="419" />
+   </framework>
+
+   <physics_engines>
+      <pointmass3d id="pm3d" iterations="10" />
+   </physics_engines>
+
+   <media>
+      <tag id="tags" index="grid" grid_size="20,20,20" />
+   </media>
+
+   <controllers>
+      <lua_controller id="c1">
+         <actuators>
+            <!-- Actuador de velocidad 3D compatible con el modelo Blimp -->
+            <quadrotor_speed implementation="default" />
+         </actuators>
+         <sensors>
+            <!-- Sensor de posicionamiento global -->
+            <positioning implementation="default" />
+         </sensors>
+         <params />
+      </lua_controller>
+   </controllers>
+
+   <arena size="5,5,3" center="0,0,1.5">
+      <ground_apriltag id="tag0" marker_id="0" position="0.0,0.0,0.0" />
+      <ground_apriltag id="tag1" marker_id="1" position="1.0,0.5,0.0" />
+      <ground_apriltag id="tag2" marker_id="2" position="-1.0,0.5,0.0" />
+
+      <!-- Entidad del Blimp según las especificaciones del paquete -->
+      <blimp id="blimp0">
+         <body position="0.0,0.0,0.0" orientation="0,0,0" />
+         <controller config="c1" />
+      </blimp>
+   </arena>
+
+   <visualization>
+    <qt-opengl lua_editor="true" show_boundary="false">
+      <camera>
+        <placements>
+          <placement index="0" position="0.0122872,0.0534732,25.7009" look_at="0.0122872,0.0534732,24.7009" up="-0.00187965,0.999998,0" lens_focal_length="90" />
+          <placement index="1" position="-6.01698,3.45411,1.68985" look_at="-5.13495,3.03202,1.48039" up="0.188941,-0.0904165,0.977817" lens_focal_length="30" />
+          <placement index="2" position="6.24865,-4.76935,2.71261" look_at="5.52826,-4.16628,2.37006" up="-0.262661,0.219888,0.939499" lens_focal_length="30" />
+        </placements>
+      </camera>
+    </qt-opengl>
+  </visualization>
+
+</argos-configuration>

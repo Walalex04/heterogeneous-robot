@@ -20,7 +20,9 @@ namespace{
 
 
 #include <argos3/core/simulator/entity/composable_entity.h>
-
+#include <argos3/plugins/simulator/entities/quadrotor_entity.h>
+#include <argos3/plugins/simulator/entities/led_equipped_entity.h>
+#include <argos3/plugins/simulator/entities/rab_equipped_entity.h>
 
 namespace argos {
     class CBlimpEntity : public CComposableEntity{
@@ -43,6 +45,7 @@ namespace argos {
             virtual void Init(TConfigurationNode& t_tree);
             virtual void Reset();
             virtual void UpdateComponents();
+
 
 
             inline CControllableEntity& GetControllableEntity(){
@@ -73,7 +76,7 @@ namespace argos {
             CLEDEquippedEntity*     m_pcLEDEquippedEntity;
             CRABEquippedEntity*     m_pcRABEquippedEntity;
 
-    }
+    };
 }
 
 

@@ -15,7 +15,7 @@ namespace argos {
 
 #include <argos3/plugins/simulator/physics_engines/pointmass3d/pointmass3d_model.h>
 #include <argos3/plugins/simulator/entities/quadrotor_entity.h>
-#include <argos3/plugins/robots/blimp/simulator/blimp_entity.h>
+#include "blimp_entity.h"
 
 namespace argos {
 

@@ -1,5 +1,5 @@
 #
-# Crazyflie headers
+# blimp headers
 #
 # argos3/plugins/robots/blimp/simulator
 set(ARGOS3_HEADERS_PLUGINS_ROBOTS_blimp_CONTROLINTERFACE
@@ -17,9 +17,8 @@ if(ARGOS_BUILD_FOR_SIMULATOR)
     simulator/pointmass3d_blimp_model.h)
 endif(ARGOS_BUILD_FOR_SIMULATOR)
 
-#
-# Crazyflie sources
-#
+
+
 set(ARGOS3_SOURCES_PLUGINS_ROBOTS_BLIMP
   ${ARGOS3_HEADERS_PLUGINS_ROBOTS_blimp_CONTROLINTERFACE}
   control_interface/ci_blimp_apriltag_sensor.cpp)
@@ -53,6 +52,15 @@ endif(ARGOS_BUILD_FOR_SIMULATOR)
 # Create Crazyflie plugin
 #
 add_library(argos3plugin_${ARGOS_BUILD_FOR}_blimp SHARED ${ARGOS3_SOURCES_PLUGINS_ROBOTS_BLIMP})
+
+
+target_include_directories(argos3plugin_${ARGOS_BUILD_FOR}_blimp PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
+)
+
+
 target_link_libraries(argos3plugin_${ARGOS_BUILD_FOR}_blimp
   argos3plugin_${ARGOS_BUILD_FOR}_genericrobot
   argos3plugin_${ARGOS_BUILD_FOR}_pointmass3d)

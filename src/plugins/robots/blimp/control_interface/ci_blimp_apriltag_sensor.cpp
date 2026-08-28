@@ -1,4 +1,4 @@
-#include "ci_crazyflie_apriltag_sensor.h"
+#include "ci_blimp_apriltag_sensor.h"
 
 #ifdef ARGOS_WITH_LUA
 #include <argos3/core/wrappers/lua/lua_utility.h>

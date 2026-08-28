@@ -1,5 +1,5 @@
 /**
- * @file <argos3/plugins/robots/crazyflie/blimp/pointmass3d_blimp_model.h>
+ * @file <argos3/plugins/robots/blimp/simulator/pointmass3d_blimp_model.h>
  *
  * ADARS project -- PCOG / SnT / University of Luxembourg
  */
@@ -9,6 +9,8 @@
 #include <argos3/core/utility/math/cylinder.h>
 #include <argos3/core/simulator/simulator.h>
 #include <argos3/core/simulator/space/space.h>
+
+#include <argos3/plugins/simulator/physics_engines/pointmass3d/pointmass3d_model.h>
 
 namespace argos {
 
