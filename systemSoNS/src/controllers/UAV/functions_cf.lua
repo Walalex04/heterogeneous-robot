@@ -1,8 +1,8 @@
 package.path = "../../controllers/common/?.lua;" .. package.path
 
 local protocol = require("protocol")
-
-
+local cons = require("constants")
+local func_common = require("functions_common")
 local functions_UAV = {}
 
 ----------------------------------------------
@@ -58,7 +58,7 @@ function functions_UAV.random_walk(robot)
             robot.rw_state = "TURN"
             robot.rw_duration = math.random(10, 30)
             local sign = (math.random() > 0.5) and 1 or -1
-            robot.rw_turn_speed = sign * (0.3 + math.random() * 0.5)
+            robot.rw_turn_speed = sign * (0.1 + math.random() * 0.5)
         else
             robot.rw_state = "FORWARD"
             robot.rw_duration = math.random(40, 100)
@@ -113,50 +113,56 @@ end
 function functions_UAV.update_topolgy(robot, currentUID, local_topolgy)
     local rab = robot.range_and_bearing
     if not rab then return end
+    local tags = robot.apriltag
 
+    local delete = true
+    local_topolgy["direct_childs"] = {}
     for _,packet in ipairs(rab) do 
         
         local decode_data = functions_UAV.decode_msg(packet["data"])
         if (decode_data["sender_id"] ~= nil and decode_data["sender_id"] ~= 0) then 
             log(string.format("The robot %d has a connection with %d", currentUID, decode_data["sender_id"]))
             --verifying if the robot does not has a leader
-            if(decode_data["sender_id"] == decode_data["parent_id"]) then
-                -- it does not has a parent
-                
-                --verifying what has more priviligies
-                if(currentUID < decode_data["sender_id"]) then
-                    -- it mean the current robot has more privilige 
-                    local_topolgy["parent_id"] = currentUID
-                    if(decode_data["sender_id"] < 10) then
-                        -- the robot detect is drone
-                        table.insert(local_topolgy["direct_childs"], decode_data["sender_id"])
 
-                        -- TODO :
-                        -- IF WE USE QUPAS WITHOUT APRILTAG
-                        -- THEN WE MUST ADD MORE CODE FOR ADDING
-                        -- IN THE TOPOLGY
+            if(currentUID > decode_data["sender_id"]) then
+                if(decode_data["parent_id"] == decode_data["sender_id"]) then
+                    -- it mean that the robot don't belong any graph
+                    local_topolgy["parentId"] = decode_data["sender_id"]
+
+
+                else 
+                    
+                    if(local_topolgy["parentId"] > decode_data["parent_id"]) then
+                        local_topolgy["parentId"] = decode_data["sender_id"]
+                        log("the parent is changed")
                     end
-                else
-                    local_topolgy["parent_id"] = decode_data["sender_id"]
+                    
                 end
-            elseif (decode_data["parent_id"] == currentUID) then
-                log("There is a robot that I am its parent")
-                if(decode_data["sender_id"] < 10) then
-                    table.insert(local_topolgy["direct_childs"], decode_data["sender_id"])
-                end
+                
             else
-                -- if the robot find other robot with a parent
-                -- and the current robot does not has a parent
-                -- also if the parent of the other robot is greater than
-                -- id of the current robot then it assign the parent
-                if(local_topolgy["parent_id"] == nil and
-                    decode_data["parent_id"] < currentUID) then 
-                    local_topolgy["parent_id"] = decode_data["sender_id"]
+                if(decode_data["sender_id"] < 10 and (decode_data["parent_id"] == currentUID)) then
+                        -- the robot detect is drone
+                    func_common.add_list(local_topolgy["direct_childs"], decode_data["sender_id"], false)
                 end
             end
         end
+        for i, tag in ipairs(robot.apriltag) do
+            if(tag.id == decode_data["sender_id"] and decode_data["parent_id"] == currentUID)then
+                func_common.add_list(local_topolgy["direct_childs"], decode_data["sender_id"], false)
+            end
+        end
+
     end
 end
 
+
+function functions_UAV.detect_role(local_topoly, currentUID)
+    if(local_topoly["parentId"] == nil or
+         local_topoly["parentId"] ==  currentUID) then
+        return cons.ROLE.BRAIN
+    end
+
+    return cons.ROLE.NAVIGATOR
+end
 return functions_UAV
 
