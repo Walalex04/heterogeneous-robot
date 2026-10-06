@@ -11,7 +11,7 @@ local rw_counter = 0
 local rw_bias = 0.0
 
 function functions_qupa.random_walk(robot)
-  local speed = 10.0
+    local speed = 10.0
     local threshold = 0.1
 
     local pos = robot.positioning.position

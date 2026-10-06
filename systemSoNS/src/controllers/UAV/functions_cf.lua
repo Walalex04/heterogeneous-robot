@@ -3,6 +3,9 @@ package.path = "../../controllers/common/?.lua;" .. package.path
 local protocol = require("protocol")
 local cons = require("constants")
 local func_common = require("functions_common")
+
+
+
 local functions_UAV = {}
 
 ----------------------------------------------
@@ -110,50 +113,6 @@ function functions_UAV.decode_msg(data)
     return decoded
 end
 
-function functions_UAV.update_topolgy(robot, currentUID, local_topolgy)
-    local rab = robot.range_and_bearing
-    if not rab then return end
-    local tags = robot.apriltag
-
-    local delete = true
-    local_topolgy["direct_childs"] = {}
-    for _,packet in ipairs(rab) do 
-        
-        local decode_data = functions_UAV.decode_msg(packet["data"])
-        if (decode_data["sender_id"] ~= nil and decode_data["sender_id"] ~= 0) then 
-            log(string.format("The robot %d has a connection with %d", currentUID, decode_data["sender_id"]))
-            --verifying if the robot does not has a leader
-
-            if(currentUID > decode_data["sender_id"]) then
-                if(decode_data["parent_id"] == decode_data["sender_id"]) then
-                    -- it mean that the robot don't belong any graph
-                    local_topolgy["parentId"] = decode_data["sender_id"]
-
-
-                else 
-                    
-                    if(local_topolgy["parentId"] > decode_data["parent_id"]) then
-                        local_topolgy["parentId"] = decode_data["sender_id"]
-                        log("the parent is changed")
-                    end
-                    
-                end
-                
-            else
-                if(decode_data["sender_id"] < 10 and (decode_data["parent_id"] == currentUID)) then
-                        -- the robot detect is drone
-                    func_common.add_list(local_topolgy["direct_childs"], decode_data["sender_id"], false)
-                end
-            end
-        end
-        for i, tag in ipairs(robot.apriltag) do
-            if(tag.id == decode_data["sender_id"] and decode_data["parent_id"] == currentUID)then
-                func_common.add_list(local_topolgy["direct_childs"], decode_data["sender_id"], false)
-            end
-        end
-
-    end
-end
 
 
 function functions_UAV.detect_role(local_topoly, currentUID)
@@ -163,6 +122,18 @@ function functions_UAV.detect_role(local_topoly, currentUID)
     end
 
     return cons.ROLE.NAVIGATOR
+end
+
+
+function functions_UAV.detect_apriltag(robot) 
+    local child_apriltag = {}
+    local robot_detect_ap = robot.apriltag
+    for _, tag in ipairs(robot_detect_ap) do
+        --log(string.format("desde el robot %d fue agregado el robot qupa con ud de %d", robot.ROBOT_UID, tag.id))
+        table.insert(child_apriltag, tag.id)
+    end
+
+    return child_apriltag
 end
 return functions_UAV
 
