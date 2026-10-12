@@ -1,8 +1,9 @@
 pcall(function() os.setlocale("C", "numeric") end)
 package.path = "../../controllers/models/?.lua;" .. package.path
-
+package.path = "../../controllers/utils/?.lua;" .. package.path
 local ParentRobot = require("ParentRobot")
 local ChildRobot  = require("ChildRobot")
+local Helpers = require("helper_functions")
 --[[
 
 local consts = require("constants")
@@ -81,7 +82,11 @@ local UID = {
     cf1 = 2,
     cf2 = 3,
     cf3 = 4,
-    cf4 = 6
+    cf4 = 5,
+    cf5 = 6,
+    cf6 = 7,
+    cf7 = 8
+
 }
 
 -- initilize physic variables
@@ -89,6 +94,152 @@ ParentRobot.Robot.RobotPhyParam.robotID     = UID[robot.id]
 ParentRobot.Robot.RobotPhyParam.robotRANk   = UID[robot.id]
 ParentRobot.Robot.RobotPhyParam.robotType   = ParentRobot.Robot.TypeRobot.DRONE
 
+local apriltag_array = {}
+
+
+---------------------------------------------------------------
+-----            Function own crazyflie
+--------------------------------------------------------------
+
+function update_apriltags()
+    apriltag_array = {}
+    
+    if robot.apriltag then
+        for i = 1, #robot.apriltag do
+            local tag = robot.apriltag[i]
+            table.insert(apriltag_array, {
+                id = tag.id,
+                angle = tag.angle,
+                distance = tag.distance,
+                x = tag.x,
+                yaw = tag.yaw
+            })
+        end
+    end
+    
+end
+
+local state = "FORWARD" -- Estados: "FORWARD", "TURNING", "ESCAPE"
+local ticks_counter = 0
+local current_turn_dir = 1
+-----------------------------------------------------------------
+----          Function para Ruta Fija y Giros Suaves (Crazyflie)
+----------------------------------------------------------------
+
+function fixed_path_logic()
+
+    -- ESTADO 1: GIRANDO (Giros suaves y controlados usando 0.1)
+    if state == "TURNING" then
+        robot.quadrotor.set_linear_velocity(0.0, 0.0, 0.0)
+        robot.quadrotor.set_rotational_speed(current_turn_dir * 0.1) -- Giro suave basado en 0.1
+        ticks_counter = ticks_counter - 1
+        
+        if ticks_counter <= 0 then
+            -- Al terminar el giro, pasa al estado de avance recto (escape/reingreso)
+            state = "ESCAPE"
+            ticks_counter = 40 -- Ticks que avanza recto para reingresar al área segura
+        end
+        return
+    end
+
+    -- ESTADO 2: ESCAPANDO (Avanza de forma estable y constante usando 0.1)
+    if state == "ESCAPE" then
+        robot.quadrotor.set_linear_velocity(0.1, 0.0, 0.0) -- Avance constante a 0.1
+        robot.quadrotor.set_rotational_speed(0.0)
+        ticks_counter = ticks_counter - 1
+        
+        if ticks_counter <= 0 then
+            -- Retorna al patrullaje normal
+            state = "FORWARD"
+        end
+        return
+    end
+
+    -- ESTADO 3: FORWARD (Patrullaje de ruta fija y control de límites)
+    local x_pos = 0.0
+    local y_pos = 0.0
+    if robot.positioning and robot.positioning.position then
+        x_pos = robot.positioning.position.x
+        y_pos = robot.positioning.position.y
+    end
+    
+    -- Verificación de los límites de la arena (-1.5 a 1.5)
+    local out_of_bounds = (x_pos > 1.5 or x_pos < -1.5 or y_pos > 1.5 or y_pos < -1.5)
+
+    if out_of_bounds then
+        state = "TURNING"
+        ticks_counter = 50 -- Duración del giro suave
+        current_turn_dir = (math.random() > 0.5) and 1 or -1
+        
+        robot.quadrotor.set_linear_velocity(0.0, 0.0, 0.0)
+        robot.quadrotor.set_rotational_speed(current_turn_dir * 0.1)
+    else
+        -- Ruta fija: Avance lineal constante y suave utilizando el valor base de 0.1
+        robot.quadrotor.set_linear_velocity(0.1, 0.0, 0.0)
+        robot.quadrotor.set_rotational_speed(0.0)
+    end
+end
+
+
+function crazyflie_approach_behavior()
+    if not ParentRobot or not ParentRobot.Brain or type(ParentRobot.Brain.updateTargetGraph) ~= "function" then
+        return
+    end
+
+    local tag_detected = false
+    local tag_x = 0.0
+    local tag_y = 0.0
+
+    if robot.apriltag and #robot.apriltag > 0 then
+        for i = 1, #robot.apriltag do
+            if robot.apriltag[i].id == 106 then
+                tag_detected = true
+                tag_x = robot.apriltag[i].x
+                tag_y = robot.apriltag[i].y
+                break
+            end
+        end
+    end
+
+    if tag_detected then
+        if math.abs(tag_x) < 0.15 and math.abs(tag_y) < 0.15 then
+            robot.quadrotor.set_linear_velocity(0.0, 0.0, 0.0)
+            robot.quadrotor.set_rotational_speed(0.0)
+        else
+            local drone_pos = robot.positioning.position
+            local target_center_x = drone_pos.x + tag_x
+            local target_center_y = drone_pos.y + tag_y
+
+            local new_formation = {
+                { x = target_center_x + 0.0, y = target_center_y + 0.0,   yaw = 0 },
+                { x = target_center_x + 0.1, y = target_center_y + 0.1,   yaw = 0 },
+                { x = target_center_x + 0.1, y = target_center_y - 0.1,   yaw = 0 },
+                { x = target_center_x - 0.1, y = target_center_y + 0.1,   yaw = 0 },
+                { x = target_center_x - 0.1, y = target_center_y - 0.1,   yaw = 0 }
+            }
+            ParentRobot.Brain.updateTargetGraph(new_formation)
+            ParentRobot.get_child_target_graph()
+            robot.quadrotor.set_linear_velocity(0.08, 0.0, 0.0)
+            robot.quadrotor.set_rotational_speed(0.0)
+        end
+    else
+        robot.quadrotor.set_linear_velocity(0.1, 0.0, 0.0)
+        robot.quadrotor.set_rotational_speed(0.0)
+    end
+end
+
+
+function verify_com_qupa_child()
+    if(ParentRobot.Robot.ChildsRobot == nil) then return end
+    for i, child in pairs(ParentRobot.Robot.ChildsRobot) do
+        if(child[1] > 99 and child[1] < 199) then 
+            if(not Helpers.exist_id(child[1], apriltag_array)) then
+                ParentRobot.unlike_child(child[1])
+            end
+        end
+    end
+
+end
 -----------------------------------------------------------------
 ---             Principal Sequence                            ---
 -----------------------------------------------------------------
@@ -142,6 +293,7 @@ function init()
 
     ParentRobot.init(robot) -- initilize all variables
     ChildRobot.init(ParentRobot.Robot)  -- relationship the same object
+    
     robot.quadrotor.set_linear_velocity(0.0,0.0,0.0)
     robot.quadrotor.set_rotational_speed(0.0)
 end
@@ -153,73 +305,40 @@ function step()
 
     -- sense data
     ParentRobot.Robot.senseEnvRB()
+    update_apriltags()
+    --verify_com_qupa_child()
 
     -- Response and process message
     ChildRobot.response_recruiment()
+    if(ChildRobot.ParentRobot ~= nil) then
+        ParentRobot.Brain = nil
+    end
 
     ChildRobot.respond_unlike_msg() -- when parent send a unlike msg
     ParentRobot.response_unlike()   -- when child want unlike
-    -- Accept child it is neccesary
-    ParentRobot.admit_child()
 
+    -- Accept child it is neccesary
+    ParentRobot.admit_child(false,apriltag_array)
+    
     if(ChildRobot.receive_target()) then -- receive the target when there are message
-        ParentRobot.get_child_target_graph() -- udpate the new target only if there is a new change
+        ParentRobot.Robot.get_child_target_graph() -- udpate the new target only if there is a new change
     end 
     
     ParentRobot.request_recruiment() -- the method verify if it
     ParentRobot.making_topology_msg();
+
+    ChildRobot.apply_commands()
+    if(ParentRobot.Brain ~= nil) then 
+        --robot.quadrotor.set_rotational_speed(0.05)  
+        --fixed_path_logic()
+        --crazyflie_approach_behavior()
+    end
+
+
     ParentRobot.Robot.sendData();
 
 
-    --[[
-    tick_message = tick_message + 1
 
-    allow_qupa_child = funcs_UAV.detect_apriltag(robot)
-    --log(#allow_qupa_child)
-
-    for robot_id, data in pairs(childs) do
-        log(string.format("The role of the robot %d is %d", data.UID, data.STATE))
-    end
-
-    if(robot.SoNS_ROOT_ID ==  UID[robot.id])then 
-        -- brain
-        --log(string.format("the root id is %d", robot.ROBOT_UID))
-        
-        func_beh_brain.dynamic_behavior(robot, ticks)
-        
-        func_beh_brain.sending_msg_recruiment(robot, childs, target_subgraph["card_type"], ticks, target_subgraph)
-        
-        func_beh_brain.recruitment(robot, ticks, childs, target_subgraph, ids_childs_allowed, parent, allow_qupa_child)
-       
-    else
-        --child
-        func_beh_child.recruitment(robot, ticks, childs, target_subgraph, ids_childs_allowed, allow_qupa_child)
-        func_beh_child.sending_msg_recruiment(robot, childs, target_subgraph["card_type"], ticks, parent)
-        func_beh_child.recept_msg_graph(robot,target_tree, target_subgraph, ids_childs_allowed)        
-        func_beh_child.recept_instructions(robot, parent)
-    end
-    --log(string.format("** la velocidad REAL del robot %d es vx = %.4f vy = %.4f vz = %.4f", robot.ROBOT_UID, robot.qua))
-    if(STATE_ROBOT == consts.STATE_ROBOT.SEARCHING) then
-        --log(string.format("START RANDOM WALK"))
-        funcs_UAV.random_walk(robot)
-        -- SEND MSG. It is irrelavant what type of message
-        -- will send it
-        if(tick_message >= INTV_MSG) then
-            tick_message = 0
-            --log(string.format("SENDING A MESSAGE FOR BUILD THE TOP"))
-            funcs_UAV.send_searching_msg(robot, ROBOT_UID, local_topolgy["parentId"], STATE_ROBOT)
-            funcs_UAV.update_topolgy(robot, ROBOT_UID, local_topolgy)
-            funcs_common.print_topology(ROBOT_UID, local_topolgy)
-            ROLE_ROBOT =  funcs_UAV.detect_role(local_topolgy)
-
-            --log(string.format("The role of the robot %d is %d", ROBOT_UID, ROLE_ROBOT))
-            
-        end
-
-        
-
-    end
-    ]]
 end
 
 

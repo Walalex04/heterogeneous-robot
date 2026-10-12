@@ -90,10 +90,16 @@ Robot.MSGReceiveResponse = protocol.rec_msg_response
 ---@type Table
 Robot.MSGReceiveUnlike = protocol.rec_msg_unlike 
 
+
+--- Pointer to msh unlike from child
+---@type Table
+Robot.MSGReceiveUnlikeChild = protocol.rec_msg_unlike_child
+
 --- Pointer to msg target
 ---@type Table
 Robot.MSGReceiveTargetGraph = protocol.rec_msg_targetGraph
 
+Robot.MSGReceiveCMDtarget = protocol.rec_msg_command
 
 --- Pointer to stack message 
 ---@type Table
@@ -106,6 +112,31 @@ Robot.MSGSendRecruiment = protocol.msg_recruiment
 --- Pointer to sreruiment sent command
 ---@type Table
 Robot.MSGSendCommand = protocol.msg_command
+
+Robot.absolute_pos = nil
+
+Robot.protocol = protocol
+
+--- Variable that associate the target childs
+--- but when the system is not associate
+--- later must be syncronize with ChildsRobot
+Robot.Target_childs  = {} 
+
+--- Matriz childs of current robot
+---@type [RobotPhyParam.robotID, Robot.StateConRobot, integer]
+Robot.ChildsRobot = {}
+
+
+Robot.quant_target_child_drone = 0
+Robot.quant_target_child_qupa = 0
+Robot.quant_target_child_blimp = 0
+
+
+Robot.quant_current_child_drone = 0
+Robot.quant_current_child_qupa = 0
+Robot.quant_current_child_blimp = 0
+
+
 
 --- To initilize the variables of robot
 --- NOTE:IT IS IMPORTANTE INTACE BEFORE Robot.RobotPhyParam
@@ -134,19 +165,49 @@ function Robot.set_target_graph(graph)
     Robot.IntRobot.TargetGraph = Robot.TargetGraph
 end
 
+--- Function that get the target of principals childs
+function Robot.get_child_target_graph()
+    Robot.Target_childs = {}
+    Robot.quant_target_child_drone = 0
+    Robot.quant_target_child_qupa = 0
+    Robot.quant_target_child_blimp = 0
+    for i, node in ipairs(Robot.TargetGraph.children) do
+        table.insert(Robot.Target_childs, node.value)
+        if(node.value.type == Robot.TypeRobot.DRONE) then
+            Robot.quant_target_child_drone = 
+                Robot.quant_target_child_drone + 1
+        elseif (node.value.type == Robot.TypeRobot.QUPA) then
+            Robot.quant_target_child_qupa = 
+                Robot.quant_target_child_qupa + 1
+        elseif (node.value.type == Robot.TypeRobot.BLIMP) then
+            Robot.quant_target_child_blimp = 
+                Robot.quant_target_child_blimp + 1
+        end
+    end
+
+    log(string.format("There are %d target children (Drone: %d, Qupa: %d, Blimp: %d)", 
+    #Robot.Target_childs,
+    Robot.quant_target_child_drone,
+    Robot.quant_target_child_qupa,
+    Robot.quant_target_child_blimp
+))
+end
+
 
 --- Function data update the parameters of parent 
 ---@param Integer The parent robot of Id
 function Robot.update_parent(parentId)
-
-    if(parentId ~= Robot.IntRobot.SoSNRootID) then
+    log(string.format("The parent Id of function is %i", parentId or 0))
+    --if(parentId ~= Robot.IntRobot.SoSNRootID) then
         Robot.IntRobot.SoSNLastID = Robot.IntRobot.SoSNRootID
         Robot.IntRobot.SoSNLastRootRank  = Robot.IntRobot.SoSNRootRank
         Robot.IntRobot.SoSNRootID = parentId or Robot.IntRobot.RobotID
         Robot.IntRobot.SoSNRootRank = parentId or Robot.IntRobot.RobotID
-    end
+    --end
     
 end
+
+
 
 
 --- The function helps to send data through R&B 
@@ -160,6 +221,9 @@ function Robot.sendData()
     Robot.MsgToSend = protocol.select_type_msg()
     Robot.IntRobot.range_and_bearing.set_data(Robot.MsgToSend)
 end
+
+
+
 
 
 --- The function allow make a recruiment message
@@ -205,7 +269,7 @@ function Robot.make_unlike_msg(recipent_id)
             Robot.RobotPhyParam.robotID, recipent_id))
     math.randomseed(os.time() + Robot.IntRobot.RobotID *10)
     local id_msg = math.random(0, 255)
-    protocol.build_unlike_msg({
+    protocol.build_unlike_msg({  
         sender_id       = Robot.IntRobot.RobotID,
         type_msg        = protocol.TypeMsg.UNLIKE_MSG,
         packet_id       = id_msg,   -- for this context it is irrelevant
@@ -218,8 +282,8 @@ end
 
 --- The function allow 
 function Robot.make_command_msg(recipent_id, x, y, z, yaw)
-    log(string.format("The robot id %i is sent a command message to %i (x,y,z,yaw) = (%.2f,%.2f,%.2f,%.2f)",
-            Robot.RobotPhyParam.robotID, recipent_id, x, y, z, yaw))
+    --log(string.format("The robot id %i is sent a command message to %i (x,y,z,yaw) = (%.2f,%.2f,%.2f,%.2f)",
+    --        Robot.RobotPhyParam.robotID, recipent_id, x, y, z, yaw))
             
     math.randomseed(os.time() + Robot.IntRobot.RobotID * 10)
     local id_msg = math.random(0, 255)
@@ -229,7 +293,7 @@ function Robot.make_command_msg(recipent_id, x, y, z, yaw)
     local y1, y2     = Helpers.process_axis(y)
     local z1, z2     = Helpers.process_axis(z)
     local yaw1, yaw2 = Helpers.process_axis(yaw)
-
+    --log(string.format("yaw1: %.4f yaw2: %.4f", yaw1, yaw2))
     protocol.build_command_msg({
         sender_id     = Robot.IntRobot.RobotID,
         type_msg      = protocol.TypeMsg.COMMAND_MSG, -- o el tipo correspondiente
@@ -257,6 +321,11 @@ function Robot.senseEnvRB()
     -- this will clasify the msg
     local rab = Robot.IntRobot.range_and_bearing
     for _,packet in ipairs(rab) do 
+        local range = packet.range
+        local hor_bearing = packet.horizontal_bearing 
+        local ver_bearing = packet.vertical_bearing 
+        
+        
         local typeMsg = packet["data"][2] -- position for the type msg (all msg must be get)
         local destinatary = packet["data"][6]  
         -- classify the msg for later to process
@@ -274,7 +343,15 @@ function Robot.senseEnvRB()
 
         elseif (typeMsg == protocol.TypeMsg.UNLIKE_MSG) and 
                 (destinatary == Robot.RobotPhyParam.robotID) then
-            protocol.decode_unlike_msg(packet["data"])
+            --log("entry to decode unlike msg from the robot %i to %i",packet["data"][1]   ,Robot.RobotPhyParam.robotID)
+            if(packet["data"][1] > Robot.RobotPhyParam.robotID) then
+                --from child
+                protocol.decode_unlike_msg_fchild(packet["data"])
+            else 
+                --from parent
+                protocol.decode_unlike_msg(packet["data"])
+            end
+            
 
         elseif (typeMsg == protocol.TypeMsg.TARGET_GRAPH_MSG) and 
             (destinatary == Robot.RobotPhyParam.robotID)  then
@@ -283,7 +360,10 @@ function Robot.senseEnvRB()
         elseif (typeMsg == protocol.TypeMsg.COMMAND_MSG) and 
             (destinatary == Robot.RobotPhyParam.robotID)  then 
 
-            protocol.decode_command_msg(packet["data"])
+            protocol.decode_command_msg(packet["data"], range, hor_bearing, ver_bearing)
+
+            ---- TODO: HACER UNA FUNCION QUE RECOJA LA INORMACION DEL STACK Y APLIQUE LOS COMANDOS 
+
         end
 
     end

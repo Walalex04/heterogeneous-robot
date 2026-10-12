@@ -38,9 +38,11 @@ function ChildRobot.response_recruiment()
             --log(string.format("The robobt %i accept to be child of %i and this has id packet of %i", 
             --                ChildRobot.Robot.RobotPhyParam.robotID, id, value.msg.header.packet_id))
             ChildRobot.ParentRobot = id
+            ChildRobot.Robot.ParentRobot = ChildRobot.ParentRobot
             ChildRobot.Robot.update_parent(ChildRobot.ParentRobot)
             ChildRobot.Robot.make_response_msg(ChildRobot.ParentRobot, value.msg.header.packet_id, protocol.ResponseMsg.ACCEPT)
             ChildRobot.Robot.set_target_graph(nil)
+            
         elseif (ChildRobot.ParentRobot > id and id ~= ChildRobot.Robot.IntRobot.SoSNLastID) then  -- when the robot recieve  
                                                                         -- a recruiment from a parent 
                                                                         -- with better rank 
@@ -72,10 +74,14 @@ end
 
 --- Function that allow responde the unlike msg
 function ChildRobot.respond_unlike_msg()
+    
     local msgs =  ChildRobot.Robot.MSGReceiveUnlike
-    for id, value in pairs(msgs) do
+    
+    for id, value in pairs(ChildRobot.Robot.MSGReceiveUnlike) do
         if(ChildRobot.ParentRobot ~= nil) then 
+            --log(string.format("the robot %i we delete its parent", Robot.RobotPhyParam.robotID))
             ChildRobot.unlike_child(id)
+            ChildRobot.Robot.MSGReceiveUnlike[id] = nil
         end 
     end
 
@@ -85,6 +91,7 @@ end
 ---@param ParentId Integer Parent ID
 function ChildRobot.unlike_child(ParentId)
     --verify if the parent is the same 
+    --log(string.format("The current parent id is %i", ChildRobot.ParentRobot ))
     if(ParentId == ChildRobot.ParentRobot ) then
         ChildRobot.ParentRobot = nil              
         ChildRobot.Robot.update_parent(ChildRobot.ParentRobot)
@@ -102,11 +109,12 @@ function ChildRobot.receive_target()
     for sender_id, content in pairs(Robot.MSGReceiveTargetGraph) do
         for packet_id, data in pairs(content) do
             if(data.is_complete) then 
-                log(string.format("The robot %i recived a complete message from %i and there are %i packets"
-                    , Robot.RobotPhyParam.robotID, data.msg[1].header.sender_id, #data.msg))
+                --log(string.format("The robot %i recived a complete message from %i and there are %i packets"
+                --    , Robot.RobotPhyParam.robotID, data.msg[1].header.sender_id, #data.msg))
                 ChildRobot.Robot.set_target_graph(ChildRobot.build_target_graph_from_msg(sender_id, packet_id, data))
+                Robot.get_child_target_graph()
                 bool = true
-                Robot.MSGReceiveTargetGraph[sender_id][packet_id] = {}
+                Robot.MSGReceiveTargetGraph[sender_id][packet_id] = nil
             end
         end
     end
@@ -198,6 +206,114 @@ function ChildRobot.build_target_graph_from_msg(sender_id, packet_id, target_ent
 
     -- 4. Generar el grafo final usando tu función
     return graph_fn.make_target_graph(brain_config)
+end
+function ChildRobot.apply_commands(type)
+    local cmd_data = Robot.MSGReceiveCMDtarget[ChildRobot.ParentRobot]
+        
+        if not cmd_data or not cmd_data.is_complete then 
+            return 
+        end
+
+        local msg = cmd_data.msg
+        local payload = msg.payload
+
+        -- 2. Decodificar los valores de los bytes (MSB y LSB) con complemento a 2
+        local target_x = Helpers.combine_bytes(payload.tar_pos_x_1, payload.tar_pos_x_2) *1000
+        local target_y = Helpers.combine_bytes(payload.tar_pos_y_1, payload.tar_pos_y_2) *1000
+        local target_z = Helpers.combine_bytes(payload.tar_pos_z_1, payload.tar_pos_z_2) *1000
+        local target_yaw = 2 * (Helpers.combine_bytes(payload.tar_yaw_1, payload.tar_yaw_2))
+
+        -- 3. Obtener orientación actual (el bearing / orientation ya opera en radianes)
+        local current_yaw = Robot.IntRobot.positioning.orientation.z
+        
+        -- 4. Rotación del objetivo usando la diferencia de ángulos
+        local delta_yaw = target_yaw - current_yaw
+        local cos_d = math.cos(delta_yaw)
+        local sin_d = math.sin(delta_yaw)
+
+        local target_x_rot = target_x * cos_d - target_y * sin_d
+        local target_y_rot = target_x * sin_d + target_y * cos_d
+
+        -- 5. Posiciones relativas del sensor (escaladas a metros)
+        local sense_x = cmd_data.x_rel 
+        local sense_y = cmd_data.y_rel 
+        local sense_z = cmd_data.z_rel 
+
+        -- 6. Cálculo del Error Proporcional
+        local error_x = sense_x + target_x_rot
+        local error_y = sense_y + target_y_rot
+        local error_z = (2 * sense_z) + target_z 
+        
+        -- Error de yaw normalizado al rango [-pi, pi]
+        local error_yaw = -current_yaw + target_yaw
+    
+    -- 1. Verificar de forma segura que el mensaje exista y esté completo
+    if(type == Robot.TypeRobot.QUPA)then  
+        local error_yaw_deg = -current_yaw + target_yaw
+        local error_yaw = error_yaw_deg * math.pi / 180.0
+
+        local Kp_v = 10
+        local Kp_w = 17
+        local Kp_yaw = 5.0
+        local max_v = 100
+
+        local error_dist = math.sqrt(error_x * error_x + error_y * error_y)
+        local error_heading = math.atan2(error_y, error_x)
+
+        local v_linear = Kp_v * error_dist
+        if v_linear > max_v then
+            v_linear = max_v
+        end
+
+        v_linear = v_linear * math.cos(error_heading)
+        if v_linear < 0 then
+            v_linear = 0
+        end
+
+        local v_angular = (Kp_w * error_heading) + (Kp_yaw * error_yaw)
+
+        local left_speed = v_linear - v_angular
+        local right_speed = v_linear + v_angular
+
+        Robot.IntRobot.wheels.set_velocity(left_speed, right_speed)
+    else
+        
+        --error_yaw = (error_yaw + math.pi) % (2 * math.pi) - math.pi
+
+        -- 7. Log detallado para depuración clara en una sola línea
+        --log(string.format(
+        --    "[CMD] Target(%.2f, %.2f) | Sense(%.2f, %.2f) | Err(X:%.2f, Y:%.2f, Z:%.2f) | YawErr:%.2f",
+        --    target_x_rot, target_y_rot, 
+        --    sense_x, sense_y, 
+        --    error_x, error_y, error_z, 
+        --    error_yaw
+        --))
+
+        -- 8. Ganancias Proporcionales y Límites
+        local K_pos = 0.0002
+        local K_yaw = 0.75
+
+
+        local MAX_VEL_TRANSLACIONAL = 8
+        local MAX_VEL_ROTACIONAL   = 3.0
+
+        local function clamp(val, limit)
+            if val > limit then return limit end
+            if val < -limit then return -limit end
+            return val
+        end
+
+        -- 9. Cálculo de velocidades por control proporcional
+        local vx = clamp(K_pos * error_x, MAX_VEL_TRANSLACIONAL)
+        local vy = clamp(K_pos * error_y, MAX_VEL_TRANSLACIONAL)
+        local vz = clamp(K_pos * error_z, MAX_VEL_TRANSLACIONAL)
+        local w_z = clamp(K_yaw * error_yaw, MAX_VEL_ROTACIONAL)
+        
+        -- 10. Enviar comandos al quadrotor
+        Robot.IntRobot.quadrotor.set_linear_velocity(vx, vy, vz)
+        Robot.IntRobot.quadrotor.set_rotational_speed(w_z)
+
+    end
 end
 
 return ChildRobot

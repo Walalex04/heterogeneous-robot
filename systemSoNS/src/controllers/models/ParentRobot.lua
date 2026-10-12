@@ -12,16 +12,6 @@ ParentRobot.Brain   = Brain   -- all robot start as brain
                             -- later this object point to nil
 
 
---- Variable that associate the target childs
---- but when the system is not associate
---- later must be syncronize with ChildsRobot
-ParentRobot.Target_childs  = {} 
-
-
-
---- Matriz childs of current robot
----@type [RobotPhyParam.robotID, Robot.StateConRobot, integer]
-ParentRobot.ChildsRobot = {}
 
 
 --- Function that allow initilize the instance
@@ -31,19 +21,22 @@ function ParentRobot.init(robot)
     ParentRobot.Robot.init(robot)
     -- initilize the target graph (all robot as brain)
     ParentRobot.Robot.set_target_graph(ParentRobot.Brain.updateTargetGraph())
-    ParentRobot.get_child_target_graph()
-    --robot.target_childs = ParentRobot.Target_childs   --only for debug
-    --log("there are " .. #ParentRobot.Target_childs .. " targets child")
+    Robot.get_child_target_graph()
+
+    --robot.target_childs = Robot.Target_childs   --only for debug
+    --log("there are " .. #Robot.Target_childs .. " targets child")
+    
 end
 
 
 function ParentRobot.request_recruiment()
     --verify if is neccesary send a recruiement msg
-    if(#ParentRobot.ChildsRobot < #ParentRobot.Target_childs) then
+    robot.targetchild = Robot.Target_childs
+    if(#Robot.ChildsRobot < #Robot.Target_childs) then
         --log(string.format("The robot %i has not the enough quantity of childs" ..
         --             "o it will send recruiment message", ParentRobot.Robot.RobotPhyParam.robotID))
         ParentRobot.Robot.make_recruiment_msg()
-    elseif (#ParentRobot.ChildsRobot == #ParentRobot.Target_childs) then
+    elseif (#Robot.ChildsRobot == #Robot.Target_childs) then
        -- deleting all message 
        
         ParentRobot.Robot.MSGSendRecruiment.QUANT_MSG = 0
@@ -52,17 +45,11 @@ function ParentRobot.request_recruiment()
     end
 end
 
---- Function that get the target of principals childs
-function ParentRobot.get_child_target_graph()
 
-    for i, node in ipairs(ParentRobot.Robot.TargetGraph.children) do
-        table.insert(ParentRobot.Target_childs, node.value)
-    end
-end
 
 
 --- Function that get the target of principals childs
-function ParentRobot.admit_child()
+function ParentRobot.admit_child(is_crazyflie, list_qupa)
     local msgs = ParentRobot.Robot.MSGReceiveResponse
 
     --ParentRobot.Robot.IntRobot.childs_request = msgs;
@@ -74,12 +61,23 @@ function ParentRobot.admit_child()
                 if(value.msg.payload.response == Protocol.ResponseMsg.ACCEPT) then
                 --log(string.format("The robot %i receive an accept response from robot %i",
                 --            ParentRobot.Robot.RobotPhyParam.robotID, id))
-                    if((not ParentRobot._is_child(id)) and (#ParentRobot.ChildsRobot < #ParentRobot.Target_childs)) then 
-                        log(string.format("The robot %i will add %i as its child",
+                    if((not ParentRobot._is_child(id)) and (#Robot.ChildsRobot < #Robot.Target_childs)) then 
+                        
+                        if(id < 99 and (Robot.quant_current_child_drone < Robot.quant_target_child_drone)) then
+                            --  is a drone
+                            log(string.format("The robot %i will add the drone %i as its child",
                                         ParentRobot.Robot.RobotPhyParam.robotID, id))
-                        table.insert(ParentRobot.ChildsRobot, {id, Robot.StateComRobot.UPDATING_GRAPH})
-                        ParentRobot.Robot.IntRobot.current_childs = ParentRobot.ChildsRobot
-                    elseif(#ParentRobot.ChildsRobot >= #ParentRobot.Target_childs)  and ((not ParentRobot._is_child(id)) ) then 
+                            table.insert(Robot.ChildsRobot, {id, Robot.StateComRobot.UPDATING_GRAPH})
+                            ParentRobot.Robot.IntRobot.current_childs = Robot.ChildsRobot
+                            Robot.quant_current_child_drone = 
+                                Robot.quant_current_child_drone + 1
+                        elseif(id > 99 and id < 199 and (Robot.quant_current_child_qupa < Robot.quant_target_child_qupa)) then
+                            ParentRobot.add_qupa(id, is_crazyflie, list_qupa)
+                            Robot.quant_current_child_qupa = 
+                                Robot.quant_current_child_qupa + 1
+                        end
+                        
+                    elseif(#Robot.ChildsRobot >= #Robot.Target_childs)  and ((not ParentRobot._is_child(id)) ) then 
                         log(string.format("The robot %i will send an unlike msg to %i",
                                         ParentRobot.Robot.RobotPhyParam.robotID, id))
                         ParentRobot.Robot.make_unlike_msg(id)
@@ -95,24 +93,60 @@ function ParentRobot.admit_child()
 end
 
 
+function ParentRobot.add_qupa(id, is_crazyflie, list_qupa)
+    -- it neccesary verify if there is in stack
+    if(is_crazyflie) then
+        -- it neccesary verify if there is in stack
+        if(Helpers.exist_id(id, list_qupa))then 
+            log(string.format("The robot %i will add the qupa %i as its child",
+            ParentRobot.Robot.RobotPhyParam.robotID, id))
+            table.insert(Robot.ChildsRobot, {id, Robot.StateComRobot.UPDATING_GRAPH})
+                ParentRobot.Robot.IntRobot.current_childs = Robot.ChildsRobot
+        else
+            log(string.format("The parent robot %i perceives the qupa %i, but cannot add it as a child because it is not visible by the camera",
+            ParentRobot.Robot.RobotPhyParam.robotID, id))
+            -- TODO: ESTO GENERA UN PROBLEMA, PORQ CUANDO SE ENVIE 
+            -- EL MENSAJE PARA QUE EL HIJO SE DESVINCULE
+            -- ENTONCES YA NO PODRA SER ACEPTAO DE NUEVO
+            -- POR LO QUE SE DEBE CREAR OTRO METODO DE COMUNICACION
+            -- QUE PERMITA AGREGARLO AUQNUE HAYA SIDO RECHAZO
+            ParentRobot.Robot.make_unlike_msg(id)
+        end
+    else
+        log(string.format("The robot %i will add the qupa %i as its child",
+        ParentRobot.Robot.RobotPhyParam.robotID, id))
+        table.insert(Robot.ChildsRobot, {id, Robot.StateComRobot.UPDATING_GRAPH})
+            ParentRobot.Robot.IntRobot.current_childs = Robot.ChildsRobot
+    end 
+end
+
 --- Funcion that proccess all unliek message
 function ParentRobot.response_unlike()
-    local msgs =  ParentRobot.Robot.MSGReceiveUnlike
+    local msgs =  ParentRobot.Robot.MSGReceiveUnlikeChild
       for id, value in pairs(msgs) do
+        log(string.format("--------the robot %i has sent a unlink message", id))
         if(ParentRobot._is_child(id)) then
             ParentRobot.unlike_child(id)
         end
-        ParentRobot.Robot.MSGReceiveUnlike[id] = nil
+        ParentRobot.Robot.MSGReceiveUnlikeChild[id] = nil
     end
 end
 
 --- Delete a child of the list
 function ParentRobot.unlike_child(id)
-    for i, value in ipairs(ParentRobot.ChildsRobot) do
+    for i, value in ipairs(Robot.ChildsRobot) do
         if(id == value[1]) then
             log(string.format("The robot %i unliking the child %i",
                 ParentRobot.Robot.RobotPhyParam.robotID, value[1]))
-            ParentRobot.ChildsRobot[i] = nil
+            Robot.ChildsRobot[i] = nil
+            ParentRobot.Robot.IntRobot.current_childs = Robot.ChildsRobot
+            if(id < 99) then
+                Robot.quant_current_child_drone = 
+                                Robot.quant_current_child_drone - 1
+            elseif id < 199 and id > 99 then
+                Robot.quant_current_child_qupa = 
+                        Robot.quant_current_child_qupa - 1
+            end
         end
     end
 end
@@ -124,13 +158,13 @@ end
 function ParentRobot.make_array_message(list_of_child, target_graph_child)
     local children = {}
     for i, child in pairs(target_graph_child) do
-        log(child.value.id)
+        --log(child.value.id)
         children.id = child.value.id
         children.x = child.value.pose.x 
         children.y = child.value.pose.y 
         children.yaw = child.value.pose.yaw
         children.type = child.value.type
-        log(children.id)
+        --log(children.id)
         table.insert(list_of_child, children)
         children = {}
         if(#child.children ~= 0) then 
@@ -193,37 +227,35 @@ end
 --- function that relationship the children with target, this  
 --- allow send target graph and commands
 function ParentRobot.making_topology_msg()
-
-    if((#ParentRobot.ChildsRobot ~= #ParentRobot.Target_childs) or (Robot.TargetGraph == nil)) then return end
+    if((#Robot.ChildsRobot ~= #Robot.Target_childs) or (Robot.TargetGraph == nil)) then return end
+    if(Robot.MSGSendCommand.QUANT_MSG ~= 0 or Robot.MSGSendCommand.INDEX_MSG ~= 0) then return end
     local graph_childrens = Robot.TargetGraph.children;
     local list_of_children = {}
     local children = {}
 
     --every old msg must be delete
-    Robot.MSGSendCommand = {
-        QUANT_MSG = 0,
-        INDEX_MSG = 0,
-        MSG = {}
-    }
-
+    Robot.MSGSendCommand.QUANT_MSG = 0
+    Robot.MSGSendCommand.INDEX_MSG = 0
+    Robot.MSGSendCommand.MSG = {}
 
     for i, values in pairs(graph_childrens) do
         
-        if(ParentRobot.ChildsRobot[i][2] == Robot.StateComRobot.UPDATING_GRAPH) then 
-            --log(string.format("We will the target graph of%i the index correspond to %i", i, ParentRobot.ChildsRobot[i][1]))
+        if(Robot.ChildsRobot[i][2] == Robot.StateComRobot.UPDATING_GRAPH) then 
+            --log(string.format("We will the target graph of%i the index correspond to %i", i, Robot.ChildsRobot[i][1]))
             -- principal childs  
             -- the rest of the child
             ParentRobot.make_array_message(list_of_children, values.children)
-            ParentRobot.generating_graph_message(ParentRobot.ChildsRobot[i][1], list_of_children)
+            ParentRobot.generating_graph_message(Robot.ChildsRobot[i][1], list_of_children)
 
-            ParentRobot.ChildsRobot[i][2] = Robot.StateComRobot.READY
+            Robot.ChildsRobot[i][2] = Robot.StateComRobot.READY
             ParentRobot.Robot.IntRobot.array_child_targ = list_of_children
             
-        elseif(ParentRobot.ChildsRobot[i][2] == Robot.StateComRobot.READY) then
+        elseif(Robot.ChildsRobot[i][2] == Robot.StateComRobot.READY) then
             -- we will send the commands 
-
-            ParentRobot.Robot.make_command_msg(ParentRobot.ChildsRobot[i][1], 
-                values.value.pose.x,values.value.pose.y,0,values.value.pose.yaw)
+            local yaw = Robot.IntRobot.positioning.orientation.z 
+            --log(string.format("the parent will sent %.2f", yaw))
+            ParentRobot.Robot.make_command_msg(Robot.ChildsRobot[i][1], 
+                values.value.pose.x,values.value.pose.y,0,yaw)
 
         end
         list_of_children = {}
@@ -241,13 +273,23 @@ end
 ---@param RobotId Integer The id that will use for verification
 ---@return Bool if it is a child
 function ParentRobot._is_child(RobotId)
-    for i, list in ipairs(ParentRobot.ChildsRobot) do 
+    for i, list in ipairs(Robot.ChildsRobot) do 
         if list[1] == RobotId then 
             return true
         end 
     end
 
     return false
+end
+
+
+function ParentRobot.need_child()
+    local need = (Robot.quant_target_child_drone - Robot.quant_current_child_drone > 0) or
+                      (Robot.quant_target_child_qupa - Robot.quant_current_child_qupa > 0) or
+                      (Robot.quant_target_child_blimp - Robot.quant_current_child_blimp > 0)
+
+    return need
+    
 end
 
 return ParentRobot

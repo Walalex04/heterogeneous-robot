@@ -253,6 +253,7 @@ Protocol.msg_unlike = {
 }
 
 
+
 -- Variable that store the prox data that will 
 --- send, only for target operation
 ---@type table
@@ -287,6 +288,12 @@ Protocol.rec_msg_response = {}  -- ID = {Is_complete: true or false, value = {}}
 ---@type table
 Protocol.rec_msg_unlike = {}  -- ID = {Is_complete: true or false, value = {}} (variable strcture)
 
+
+-- Store all msg that was recived associated with unlike
+---@type table
+Protocol.rec_msg_unlike_child = {}  -- ID = {Is_complete: true or false, value = {}} (variable strcture)
+
+
 --- Store all msg that was recived associated with target
 ---@type table
 Protocol.rec_msg_targetGraph = {}
@@ -309,15 +316,13 @@ Protocol.stack_msg = {}  -- [id msg] = [Type of message]
 -------------------------------------------------
 
 
----
-
 
 --- Function that select what type of messages will be
 --- sent, there are differentes messages that need to 
 --- be sent, and for one tick only one message can be sent
 --- for that the function will work as manager 
 function Protocol.select_type_msg()
-    --log(Protocol.pointer_Msg )
+    
     local msg = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0} 
@@ -366,33 +371,12 @@ function Protocol.select_type_msg()
         --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
     end
 
-    
-    if((Protocol.pointer_Msg == Protocol.TypeMsg.UNLIKE_MSG)
-        and (Protocol.msg_unlike.QUANT_MSG ~= 0) ) then
-        
-        msg = Protocol.msg_unlike.MSG[Protocol.msg_unlike.INDEX_MSG + 1] --start with 0
 
-        
-        if((Protocol.msg_unlike.INDEX_MSG + 1) 
-            < Protocol.msg_unlike.QUANT_MSG) then
-            -- we assure that the prox pointer will be the same msg type
-            Protocol.pointer_Msg = Protocol.pointer_Msg - 1; 
-            Protocol.msg_unlike.INDEX_MSG = Protocol.msg_unlike.INDEX_MSG + 1
-        else
-            -- when there are not message more to be sent then we restaure         
-            Protocol.msg_unlike.INDEX_MSG  = 0
-            Protocol.msg_unlike.QUANT_MSG  = 0
-            Protocol.msg_unlike.MSG  = {}
-            
-        end
-    else
-        --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
-    end    
 
 
     if((Protocol.pointer_Msg == Protocol.TypeMsg.TARGET_GRAPH_MSG)
         and (Protocol.msg_targraph.QUANT_MSG ~= 0) ) then
-        log("The target message to be sent")
+        --log("The target message to be sent")
         msg = Protocol.msg_targraph.MSG[Protocol.msg_targraph.INDEX_MSG + 1] --start with 0
 
         
@@ -414,7 +398,7 @@ function Protocol.select_type_msg()
 
      if((Protocol.pointer_Msg == Protocol.TypeMsg.COMMAND_MSG)
         and (Protocol.msg_command.QUANT_MSG ~= 0) ) then
-        log("The target message to be sent")
+        --log("The target message to be sent")
         msg = Protocol.msg_command.MSG[Protocol.msg_command.INDEX_MSG + 1] --start with 0
 
         
@@ -434,7 +418,30 @@ function Protocol.select_type_msg()
         --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
     end   
 
-    if(Protocol.pointer_Msg >= Protocol.NUM_TYPE_MSG)
+        
+    if((Protocol.pointer_Msg == Protocol.TypeMsg.UNLIKE_MSG)
+        and (Protocol.msg_unlike.QUANT_MSG > 0) ) then
+        --log("sending unlike msg")
+        msg = Protocol.msg_unlike.MSG[Protocol.msg_unlike.INDEX_MSG + 1] --start with 0
+
+        
+        if((Protocol.msg_unlike.INDEX_MSG + 1) 
+            < Protocol.msg_unlike.QUANT_MSG) then
+            -- we assure that the prox pointer will be the same msg type
+            Protocol.pointer_Msg = Protocol.pointer_Msg - 1; 
+            Protocol.msg_unlike.INDEX_MSG = Protocol.msg_unlike.INDEX_MSG + 1
+        else
+            -- when there are not message more to be sent then we restaure         
+            Protocol.msg_unlike.INDEX_MSG  = 0
+            Protocol.msg_unlike.QUANT_MSG  = 0
+            Protocol.msg_unlike.MSG  = {}
+            
+        end
+    else
+        --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
+    end    
+
+    if(Protocol.pointer_Msg >= Protocol.NUM_TYPE_MSG+1)
          then Protocol.pointer_Msg = 0 end;
     Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
 
@@ -580,8 +587,10 @@ function Protocol.build_unlike_msg(field)
     packet[Protocol.BYTE_UNLIKE_ROBOTS.TARGET_ID]      = field.target_id or 0
 
     -- the message must be accumalate
+
     Protocol.msg_unlike.QUANT_MSG = Protocol.msg_unlike.QUANT_MSG + 1
     Protocol.msg_unlike.MSG[Protocol.msg_unlike.QUANT_MSG] = packet; -- add new message
+    log("the quant is " .. Protocol.msg_unlike.QUANT_MSG)
 end
 
 
@@ -603,16 +612,41 @@ function Protocol.decode_unlike_msg(data)
             index_packet  = data[Protocol.BYTE_UNLIKE_ROBOTS.INDEX_PACKET],
             target_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.TARGET_ID],
         }
-    }
+    }  
 
     local is_comp = (decoded.header.quant_packets == decoded.header.index_packet)
     Protocol.rec_msg_unlike[decoded.header.sender_id] = {
         is_complete = is_comp,
         msg = decoded
-    }
-
-    
+    } 
 end
+
+--- Function that make and store unlike msg
+--- @param data tabla data recived
+function Protocol.decode_unlike_msg_fchild(data)
+     if type(data) ~= "table" or #data < 64 then
+        return {valid = false, error = "packet too short or invalid"}
+    end
+
+    local decoded = {
+        valid = true,
+        header = {
+            sender_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.SENDER_ID],
+            type_msg      = data[Protocol.BYTE_UNLIKE_ROBOTS.TYP_MSG],
+            packet_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.PACKET_ID],
+            quant_packets = data[Protocol.BYTE_UNLIKE_ROBOTS.QUANT_PACKETS],
+            index_packet  = data[Protocol.BYTE_UNLIKE_ROBOTS.INDEX_PACKET],
+            target_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.TARGET_ID],
+        }
+    }  
+
+    local is_comp = (decoded.header.quant_packets == decoded.header.index_packet)
+    Protocol.rec_msg_unlike_child[decoded.header.sender_id] = {
+        is_complete = is_comp,
+        msg = decoded
+    } 
+end
+
 
 
 
@@ -660,8 +694,8 @@ function Protocol.build_target_msg(field)
     packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_2_CHILD_2]    = field.yaw_2_child_2 or 0
 
     -- the message must be accumalate
-    log(string.format("we add a new message with id %i, the total quantity is %i and the current index %i and this will send to %i",
-                     field.packet_id, field.quant_packets, field.index_packet, field.target_id ))
+    --log(string.format("we add a new message with id %i, the total quantity is %i and the current index %i and this will send to %i",
+    --                 field.packet_id, field.quant_packets, field.index_packet, field.target_id ))
     Protocol.msg_targraph.QUANT_MSG = Protocol.msg_targraph.QUANT_MSG + 1
     Protocol.msg_targraph.MSG[Protocol.msg_targraph.QUANT_MSG] = packet; -- add new message
 end
@@ -748,17 +782,24 @@ function Protocol.build_command_msg(field)
     packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_YAW_1]     = field.tar_yaw_1 or 0
     packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_YAW_2]     = field.tar_yaw_2 or 0
 
-    Protocol.msg_command = Protocol.msg_command or { QUANT_MSG = 0, MSG = {} }
+
     Protocol.msg_command.QUANT_MSG = Protocol.msg_command.QUANT_MSG + 1
     Protocol.msg_command.MSG[Protocol.msg_command.QUANT_MSG] = packet
+
+    log(string.format("There are %i messages stored", Protocol.msg_command.QUANT_MSG))
+    
 end
 
 --- Function that decode the data and store to the correct variable
 --- @param data table data received
-function Protocol.decode_command_msg(data)
+function Protocol.decode_command_msg(data, range, hor_bearing, ver_bearing)
     if type(data) ~= "table" or #data < 64 then
         return {valid = false, error = "packet too short or invalid"}
     end
+    
+    local x = range * math.abs(math.cos(ver_bearing)) * math.cos(hor_bearing)
+    local y = range * math.abs(math.cos(ver_bearing)) * math.sin(hor_bearing)
+    local z = range * math.sin(ver_bearing)
 
     local decoded = {
         valid = true,
@@ -788,7 +829,10 @@ function Protocol.decode_command_msg(data)
     Protocol.rec_msg_command = Protocol.rec_msg_command or {}
     Protocol.rec_msg_command[decoded.header.sender_id] = {
             is_complete = is_comp,
-            msg = decoded
+            msg = decoded,
+            x_rel = x * 10,
+            y_rel = y * 10,
+            z_rel = z * 10
         }
 
 end

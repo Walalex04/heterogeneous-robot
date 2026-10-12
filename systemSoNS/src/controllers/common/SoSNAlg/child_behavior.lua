@@ -244,8 +244,8 @@ function child_behavior.recept_instructions(robot, parent)
             local error_y = y + target_padre.y
             local error_z = z + target_padre.z
             
-            local K_pos = 0.0005
-            local K_yaw = 0.8
+            local K_pos = 0.001
+            local K_yaw = 0.5
 
 
             local MAX_VEL_TRANSLACIONAL = 10
