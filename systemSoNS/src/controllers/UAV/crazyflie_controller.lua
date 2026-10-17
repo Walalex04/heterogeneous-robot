@@ -157,17 +157,20 @@ function step()
     -- Response and process message
     ChildRobot.response_recruiment()
 
+    ChildRobot.respond_unlike_msg() -- when parent send a unlike msg
+    ParentRobot.response_unlike()   -- when child want unlike
     -- Accept child it is neccesary
     ParentRobot.admit_child()
 
-    --verify if is neccesary send a recruiement msg
-    if(#ParentRobot.ChildsRobot < #ParentRobot.Target_childs) then
-        --log(string.format("The robot %i has not the enough quantity of childs" ..
-        --             "o it will send recruiment message", ParentRobot.Robot.RobotPhyParam.robotID))
-        ParentRobot.Robot.make_recruiment_msg()
-    end
+    if(ChildRobot.receive_target()) then -- receive the target when there are message
+        ParentRobot.get_child_target_graph() -- udpate the new target only if there is a new change
+    end 
     
+    ParentRobot.request_recruiment() -- the method verify if it
+    ParentRobot.making_topology_msg();
     ParentRobot.Robot.sendData();
+
+
     --[[
     tick_message = tick_message + 1
 

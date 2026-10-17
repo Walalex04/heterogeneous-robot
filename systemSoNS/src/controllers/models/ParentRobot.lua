@@ -1,7 +1,8 @@
+package.path = "../../controllers/utils/?.lua;" .. package.path
 local Robot = require("Robot")
 local Brain = require("BrainRobot")
 local Protocol = require("Protocol") --- only for enums
-
+local Helpers = require("helper_functions")
 
 local ParentRobot = {}
 
@@ -15,6 +16,7 @@ ParentRobot.Brain   = Brain   -- all robot start as brain
 --- but when the system is not associate
 --- later must be syncronize with ChildsRobot
 ParentRobot.Target_childs  = {} 
+
 
 
 --- Matriz childs of current robot
@@ -34,8 +36,25 @@ function ParentRobot.init(robot)
     --log("there are " .. #ParentRobot.Target_childs .. " targets child")
 end
 
+
+function ParentRobot.request_recruiment()
+    --verify if is neccesary send a recruiement msg
+    if(#ParentRobot.ChildsRobot < #ParentRobot.Target_childs) then
+        --log(string.format("The robot %i has not the enough quantity of childs" ..
+        --             "o it will send recruiment message", ParentRobot.Robot.RobotPhyParam.robotID))
+        ParentRobot.Robot.make_recruiment_msg()
+    elseif (#ParentRobot.ChildsRobot == #ParentRobot.Target_childs) then
+       -- deleting all message 
+       
+        ParentRobot.Robot.MSGSendRecruiment.QUANT_MSG = 0
+        ParentRobot.Robot.MSGSendRecruiment.INDEX_MSG = 0
+        ParentRobot.Robot.MSGSendRecruiment.MSG = {}
+    end
+end
+
 --- Function that get the target of principals childs
 function ParentRobot.get_child_target_graph()
+
     for i, node in ipairs(ParentRobot.Robot.TargetGraph.children) do
         table.insert(ParentRobot.Target_childs, node.value)
     end
@@ -44,17 +63,12 @@ end
 
 --- Function that get the target of principals childs
 function ParentRobot.admit_child()
-    local msgs = ParentRobot.Robot.MSGReceiveResponse;
-    --[[
-        TO DO :
-        RECORRER LA LISTA DE MENSAJES QUE SE RECIBIERON DE LOS HIJOS
-        IGNORAR LOS REJECTED POR QUE NO APORTAR NADA MAS QUE INFORMACION ACTUAL
-        DE LOS QUE ACEPTARON AGREGAR LOS MEJORES RANKEADOS (USUALMENTE LOS MENSAJES SE ORDEN YA DE ESA FORMA)
-        Y LOS QUE QUEDEN Y QUE HAYAN ACEPTADO AL PADRE ENTONCES SE DEBEN ENVIAR UN MENSAJE DE DESPARENTAR
-    ]]
+    local msgs = ParentRobot.Robot.MSGReceiveResponse
+
     --ParentRobot.Robot.IntRobot.childs_request = msgs;
     ParentRobot.Robot.IntRobot.stack_request = ParentRobot.Robot.StackMsg
-    for id, value in pairs(msgs) do 
+    for id, val in pairs(msgs) do 
+        local value = val
         for idmsg, type in pairs(ParentRobot.Robot.StackMsg) do 
             if(idmsg == value.msg.header.packet_id and type == Protocol.TypeMsg.RRECRUIMENT_MSG) then 
                 if(value.msg.payload.response == Protocol.ResponseMsg.ACCEPT) then
@@ -65,18 +79,159 @@ function ParentRobot.admit_child()
                                         ParentRobot.Robot.RobotPhyParam.robotID, id))
                         table.insert(ParentRobot.ChildsRobot, {id, Robot.StateComRobot.UPDATING_GRAPH})
                         ParentRobot.Robot.IntRobot.current_childs = ParentRobot.ChildsRobot
-                    elseif(#ParentRobot.ChildsRobot >= #ParentRobot.Target_childs) then 
+                    elseif(#ParentRobot.ChildsRobot >= #ParentRobot.Target_childs)  and ((not ParentRobot._is_child(id)) ) then 
                         log(string.format("The robot %i will send an unlike msg to %i",
                                         ParentRobot.Robot.RobotPhyParam.robotID, id))
                         ParentRobot.Robot.make_unlike_msg(id)
                     end
+                    
                 end
             end
         end
-        
+
+        ParentRobot.Robot.MSGReceiveResponse[id] = nil
+    end
+
+end
+
+
+--- Funcion that proccess all unliek message
+function ParentRobot.response_unlike()
+    local msgs =  ParentRobot.Robot.MSGReceiveUnlike
+      for id, value in pairs(msgs) do
+        if(ParentRobot._is_child(id)) then
+            ParentRobot.unlike_child(id)
+        end
+        ParentRobot.Robot.MSGReceiveUnlike[id] = nil
     end
 end
 
+--- Delete a child of the list
+function ParentRobot.unlike_child(id)
+    for i, value in ipairs(ParentRobot.ChildsRobot) do
+        if(id == value[1]) then
+            log(string.format("The robot %i unliking the child %i",
+                ParentRobot.Robot.RobotPhyParam.robotID, value[1]))
+            ParentRobot.ChildsRobot[i] = nil
+        end
+    end
+end
+
+
+--- trasnform from graph to array, and help to send the message
+---@param list_of_child Table
+---@param target_graph_child Table
+function ParentRobot.make_array_message(list_of_child, target_graph_child)
+    local children = {}
+    for i, child in pairs(target_graph_child) do
+        log(child.value.id)
+        children.id = child.value.id
+        children.x = child.value.pose.x 
+        children.y = child.value.pose.y 
+        children.yaw = child.value.pose.yaw
+        children.type = child.value.type
+        log(children.id)
+        table.insert(list_of_child, children)
+        children = {}
+        if(#child.children ~= 0) then 
+            ParentRobot.make_array_message(list_of_child, child.children)
+        end
+    end
+    
+end
+
+--- Generate the fragments of messages and call a protocol function for saving on stack 
+---@param id_child Integer
+---@param array_childs Table
+function ParentRobot.generating_graph_message(id_child, array_childs)
+    local num_elements = #array_childs
+    local field = {}
+    local quant_packages = 0
+    math.randomseed(os.time() + Robot.IntRobot.RobotID *10)
+    local id_msg = math.random(0, 255)
+
+    field.sender_id = Robot.RobotPhyParam.robotID
+    field.type_msg = Protocol.TypeMsg.TARGET_GRAPH_MSG
+    field.packet_id = id_msg
+    field.index_packet = 0
+    field.quant_packets = (num_elements +1)// 2
+    field.target_id = id_child
+
+    for i = 1, num_elements, 2 do 
+        local id = array_childs[i].id
+        
+        field.level_child_1 = #tostring(id)         
+        field.type_child_1 = array_childs[i].type
+        field.id_child_1_1 = math.floor(id / 256) % 256 --MSB
+        field.id_child_2_1 = id % 256                   --LSB
+        field.pos_x1_child_1, field.pos_x2_child_1 = Helpers.process_axis(array_childs[i].x)
+        field.pos_y1_child_1, field.pos_y2_child_1 = Helpers.process_axis(array_childs[i].y)
+        field.pos_z1_child_1, field.pos_z2_child_1 = Helpers.process_axis(array_childs[i].z)
+        field.yaw_1_child_1,  field.yaw_2_child_1  = Helpers.process_axis(array_childs[i].yaw)
+        if array_childs[i+1] ~= nil then
+            
+            local id2 = array_childs[i + 1].id or 0
+            --log(string.format("the id 2 is %i", id2))
+            field.level_child_2 = #tostring(id2)
+            field.type_child_2  = array_childs[i + 1].type or 0
+            field.id_child_1_2  = math.floor(id2 / 256) % 256 -- MSB
+            field.id_child_2_2  = id2 % 256                   -- LSB
+            field.pos_x1_child_2, field.pos_x2_child_2 = Helpers.process_axis(array_childs[i + 1].x)
+            field.pos_y1_child_2, field.pos_y2_child_2 = Helpers.process_axis(array_childs[i + 1].y)
+            field.pos_z1_child_2, field.pos_z2_child_2 = Helpers.process_axis(array_childs[i + 1].z)
+            field.yaw_1_child_2,  field.yaw_2_child_2  = Helpers.process_axis(array_childs[i + 1].yaw)
+        end
+        field.index_packet = field.index_packet + 1;
+        Protocol.build_target_msg(field)
+       
+    end
+
+end
+
+
+
+--- function that relationship the children with target, this  
+--- allow send target graph and commands
+function ParentRobot.making_topology_msg()
+
+    if((#ParentRobot.ChildsRobot ~= #ParentRobot.Target_childs) or (Robot.TargetGraph == nil)) then return end
+    local graph_childrens = Robot.TargetGraph.children;
+    local list_of_children = {}
+    local children = {}
+
+    --every old msg must be delete
+    Robot.MSGSendCommand = {
+        QUANT_MSG = 0,
+        INDEX_MSG = 0,
+        MSG = {}
+    }
+
+
+    for i, values in pairs(graph_childrens) do
+        
+        if(ParentRobot.ChildsRobot[i][2] == Robot.StateComRobot.UPDATING_GRAPH) then 
+            --log(string.format("We will the target graph of%i the index correspond to %i", i, ParentRobot.ChildsRobot[i][1]))
+            -- principal childs  
+            -- the rest of the child
+            ParentRobot.make_array_message(list_of_children, values.children)
+            ParentRobot.generating_graph_message(ParentRobot.ChildsRobot[i][1], list_of_children)
+
+            ParentRobot.ChildsRobot[i][2] = Robot.StateComRobot.READY
+            ParentRobot.Robot.IntRobot.array_child_targ = list_of_children
+            
+        elseif(ParentRobot.ChildsRobot[i][2] == Robot.StateComRobot.READY) then
+            -- we will send the commands 
+
+            ParentRobot.Robot.make_command_msg(ParentRobot.ChildsRobot[i][1], 
+                values.value.pose.x,values.value.pose.y,0,values.value.pose.yaw)
+
+        end
+        list_of_children = {}
+    end 
+
+    
+    
+end
 
 -----------------------------------------------------
 ----        Helper functions

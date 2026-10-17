@@ -1,5 +1,8 @@
-local protocol = require("Protocol")
+package.path = "../../controllers/utils/?.lua;" .. package.path
 
+
+local protocol = require("Protocol")
+local Helpers = require("helper_functions")
 
 local Robot = {}
 
@@ -83,9 +86,26 @@ Robot.MSGReceiveRecruimente = protocol.rec_msg_recruiment
 ---@type Table
 Robot.MSGReceiveResponse = protocol.rec_msg_response 
 
+--- Pointer to msh unlike
+---@type Table
+Robot.MSGReceiveUnlike = protocol.rec_msg_unlike 
+
+--- Pointer to msg target
+---@type Table
+Robot.MSGReceiveTargetGraph = protocol.rec_msg_targetGraph
+
+
 --- Pointer to stack message 
 ---@type Table
 Robot.StackMsg = protocol.stack_msg
+
+--- Pointer to sreruiment sent message
+---@type Table
+Robot.MSGSendRecruiment = protocol.msg_recruiment
+
+--- Pointer to sreruiment sent command
+---@type Table
+Robot.MSGSendCommand = protocol.msg_command
 
 --- To initilize the variables of robot
 --- NOTE:IT IS IMPORTANTE INTACE BEFORE Robot.RobotPhyParam
@@ -118,8 +138,14 @@ end
 --- Function data update the parameters of parent 
 ---@param Integer The parent robot of Id
 function Robot.update_parent(parentId)
-    Robot.IntRobot.SoSNRootID = parentId
-    Robot.IntRobot.SoSNRootRank = parentId
+
+    if(parentId ~= Robot.IntRobot.SoSNRootID) then
+        Robot.IntRobot.SoSNLastID = Robot.IntRobot.SoSNRootID
+        Robot.IntRobot.SoSNLastRootRank  = Robot.IntRobot.SoSNRootRank
+        Robot.IntRobot.SoSNRootID = parentId or Robot.IntRobot.RobotID
+        Robot.IntRobot.SoSNRootRank = parentId or Robot.IntRobot.RobotID
+    end
+    
 end
 
 
@@ -138,6 +164,10 @@ end
 
 --- The function allow make a recruiment message
 function Robot.make_recruiment_msg()
+    if(protocol.msg_recruiment.QUANT_MSG > 0) then
+        -- there are a exiting message
+        return
+    end
     math.randomseed(os.time() + Robot.IntRobot.RobotID *10)
     local id_msg = math.random(0, 255)
     protocol.stack_msg[id_msg] = protocol.TypeMsg.RRECRUIMENT_MSG
@@ -168,18 +198,11 @@ function Robot.make_response_msg(recipent_id, id_msg, response)
     })
 end
 
---[[
-TODO:
-    La funcion ya funciona correctamente ahora es necesario que la contraparte
-    recepte el mensaje y desaocie al padre, no es necesario que reponsa el 
-    mensaje, debera ser de la misma forma a que se ha venido haciendo 
-    se debera recibir el mensaje, procesarlo y almacenarlo en la variable
-    y comprobar que este sea diferente de vacio para lanzar el metodo que 
-    desaociara al padre, considere que este metodo debera ser usado cuando 
-    el propio hijo querra desasociarce (ahora el "padre" lo desasocia) 
-]]
+
 --- The function allow 
 function Robot.make_unlike_msg(recipent_id)
+    log(string.format("The robot id %i is sent a unlike message to %i",
+            Robot.RobotPhyParam.robotID, recipent_id))
     math.randomseed(os.time() + Robot.IntRobot.RobotID *10)
     local id_msg = math.random(0, 255)
     protocol.build_unlike_msg({
@@ -189,6 +212,40 @@ function Robot.make_unlike_msg(recipent_id)
         quant_packets   = 1,
         index_packet    = 1,
         target_id       = recipent_id,
+    })
+end
+
+
+--- The function allow 
+function Robot.make_command_msg(recipent_id, x, y, z, yaw)
+    log(string.format("The robot id %i is sent a command message to %i (x,y,z,yaw) = (%.2f,%.2f,%.2f,%.2f)",
+            Robot.RobotPhyParam.robotID, recipent_id, x, y, z, yaw))
+            
+    math.randomseed(os.time() + Robot.IntRobot.RobotID * 10)
+    local id_msg = math.random(0, 255)
+
+    -- Procesar coordenadas y yaw usando tu función de ayuda para MSB y LSB (con soporte para negativos)
+    local x1, x2     = Helpers.process_axis(x)
+    local y1, y2     = Helpers.process_axis(y)
+    local z1, z2     = Helpers.process_axis(z)
+    local yaw1, yaw2 = Helpers.process_axis(yaw)
+
+    protocol.build_command_msg({
+        sender_id     = Robot.IntRobot.RobotID,
+        type_msg      = protocol.TypeMsg.COMMAND_MSG, -- o el tipo correspondiente
+        packet_id     = id_msg,
+        quant_packets = 1,
+        index_packet  = 1,
+        target_id     = recipent_id,
+        
+        tar_pos_x_1   = x1,
+        tar_pos_x_2   = x2,
+        tar_pos_y_1   = y1,
+        tar_pos_y_2   = y2,
+        tar_pos_z_1   = z1,
+        tar_pos_z_2   = z2,
+        tar_yaw_1     = yaw1,
+        tar_yaw_2     = yaw2,
     })
 end
 
@@ -214,6 +271,19 @@ function Robot.senseEnvRB()
             --log(string.format("the robot %i recieve a " .. 
             --    " response msg from robot %i", Robot.RobotPhyParam.robotID, packet["data"][1]))
             protocol.decode_response_msg(packet["data"])
+
+        elseif (typeMsg == protocol.TypeMsg.UNLIKE_MSG) and 
+                (destinatary == Robot.RobotPhyParam.robotID) then
+            protocol.decode_unlike_msg(packet["data"])
+
+        elseif (typeMsg == protocol.TypeMsg.TARGET_GRAPH_MSG) and 
+            (destinatary == Robot.RobotPhyParam.robotID)  then
+            protocol.decode_target_msg(packet["data"])
+
+        elseif (typeMsg == protocol.TypeMsg.COMMAND_MSG) and 
+            (destinatary == Robot.RobotPhyParam.robotID)  then 
+
+            protocol.decode_command_msg(packet["data"])
         end
 
     end

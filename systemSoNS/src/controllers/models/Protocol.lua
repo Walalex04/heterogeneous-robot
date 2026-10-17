@@ -103,6 +103,119 @@ Protocol.BYTE_UNLIKE_ROBOTS = {
 }
 
 
+--- Enum layout for commant msg, it does not neccesity payload
+--- Define the fixed index mapping for payload 
+---@enum Protocol.BYTE_COMMAND_ROBOTS
+Protocol.BYTE_COMMAND_ROBOTS = {
+
+    -- Unique ID of the robot sending the message
+    SENDER_ID       = 1,
+    -- The type of message
+    TYP_MSG         = 2,      
+    -- The unique ID for message
+    PACKET_ID       = 3,
+    -- Total number of packets into which the message was divided
+    QUANT_PACKETS   = 4,
+    -- The current index of packet (MAX = CANT_PACKETS)
+    INDEX_PACKET    = 5,
+    -- The target id (if it is broadcast use 0)
+    TARGET_ID       = 6,
+
+
+    TAR_POS_X_1     = 7,
+
+    TAR_POS_X_2     = 8,
+
+    TAR_POS_Y_1     = 9,
+
+    TAR_POS_Y_2     = 10,
+
+    TAR_POS_Z_1     = 11,
+
+    TAR_POS_Z_2     = 12,
+
+    TAR_YAW_1       = 13,
+
+    TAR_YAW_2       = 14
+
+}
+
+
+--- Enum layout for target send, it will more than 1
+--- Define the fixed index mapping for payload 
+---@enum Protocol.BYTE_UNLIKE_ROBOTS
+Protocol.BYTE_TARGETGRAPH_ROBOTS = {
+
+    -- Unique ID of the robot sending the message
+    SENDER_ID       = 1,
+    -- The type of message
+    TYP_MSG         = 2,      
+    -- The unique ID for message
+    PACKET_ID       = 3,
+    -- Total number of packets into which the message was divided
+    QUANT_PACKETS   = 4,
+    -- The current index of packet (MAX = CANT_PACKETS)
+    INDEX_PACKET    = 5,
+    -- The target id (if it is broadcast use 0)
+    TARGET_ID       = 6,
+
+
+
+    LEVEL_CHILDS_1   = 7,
+
+    TYPE_CHILD_1    = 8,
+
+    ID_CHILD_1_1      = 9,
+
+    ID_CHILD_2_1  = 10,
+
+    POS_X1_CHILD_1  = 11,
+
+    POS_X2_CHILD_1  = 12,
+
+    POS_Y1_CHILD_1  = 13,
+    
+    POS_Y2_CHILD_1  = 14,
+
+    POS_Z1_CHILD_1  = 15,
+
+    POS_Z2_CHILD_1  = 16,
+
+    YAW_1_CHILD_1   = 17,
+
+    YAW_2_CHILD_1   = 18, 
+
+
+    LEVEL_CHILDS_2   = 19,
+
+    TYPE_CHILD_2    = 20,
+
+    ID_CHILD_1_2      = 21,
+
+    ID_CHILD_2_2   = 22,
+
+    POS_X1_CHILD_2  = 23,
+
+    POS_X2_CHILD_2  = 24,
+
+    POS_Y1_CHILD_2  = 25,
+    
+    POS_Y2_CHILD_2  = 26,
+
+    POS_Z1_CHILD_2  = 27,
+
+    POS_Z2_CHILD_2  = 28,
+
+    YAW_1_CHILD_2   = 29,
+
+    YAW_2_CHILD_2   = 30, 
+
+
+}
+
+
+
+
 -----------------------------------------------------
 ---                 Variables
 -----------------------------------------------------
@@ -140,6 +253,26 @@ Protocol.msg_unlike = {
 }
 
 
+-- Variable that store the prox data that will 
+--- send, only for target operation
+---@type table
+Protocol.msg_targraph = {
+    QUANT_MSG = 0,
+    INDEX_MSG = 0,
+    MSG = {}
+}
+
+-- Variable that store the prox data that will 
+--- send, only for command operation
+---@type table
+Protocol.msg_command = {
+    QUANT_MSG = 0,
+    INDEX_MSG = 0,
+    MSG = {}
+}
+
+
+
 --- Store all msg that was recived associated with recruiment
 ---@type table
 Protocol.rec_msg_recruiment = {}  -- ID = {Is_complete: true or false, value = {}} (variable strcture)
@@ -148,6 +281,20 @@ Protocol.rec_msg_recruiment = {}  -- ID = {Is_complete: true or false, value = {
 --- Store all msg that was recived associated with response
 ---@type table
 Protocol.rec_msg_response = {}  -- ID = {Is_complete: true or false, value = {}} (variable strcture)
+
+
+--- Store all msg that was recived associated with unlike
+---@type table
+Protocol.rec_msg_unlike = {}  -- ID = {Is_complete: true or false, value = {}} (variable strcture)
+
+--- Store all msg that was recived associated with target
+---@type table
+Protocol.rec_msg_targetGraph = {}
+
+
+--- Store all msg that was recived associated with commands
+---@type table
+Protocol.rec_msg_command = {}
 
 
 --- Variable that store the pointer of message
@@ -222,7 +369,7 @@ function Protocol.select_type_msg()
     
     if((Protocol.pointer_Msg == Protocol.TypeMsg.UNLIKE_MSG)
         and (Protocol.msg_unlike.QUANT_MSG ~= 0) ) then
-        log("The unlike message to be sent")
+        
         msg = Protocol.msg_unlike.MSG[Protocol.msg_unlike.INDEX_MSG + 1] --start with 0
 
         
@@ -242,6 +389,50 @@ function Protocol.select_type_msg()
         --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
     end    
 
+
+    if((Protocol.pointer_Msg == Protocol.TypeMsg.TARGET_GRAPH_MSG)
+        and (Protocol.msg_targraph.QUANT_MSG ~= 0) ) then
+        log("The target message to be sent")
+        msg = Protocol.msg_targraph.MSG[Protocol.msg_targraph.INDEX_MSG + 1] --start with 0
+
+        
+        if((Protocol.msg_targraph.INDEX_MSG + 1) 
+            < Protocol.msg_targraph.QUANT_MSG) then
+            -- we assure that the prox pointer will be the same msg type
+            Protocol.pointer_Msg = Protocol.pointer_Msg - 1; 
+            Protocol.msg_targraph.INDEX_MSG = Protocol.msg_targraph.INDEX_MSG + 1
+        else
+            -- when there are not message more to be sent then we restaure         
+            Protocol.msg_targraph.INDEX_MSG  = 0
+            Protocol.msg_targraph.QUANT_MSG  = 0
+            Protocol.msg_targraph.MSG  = {}
+            
+        end
+    else
+        --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
+    end   
+
+     if((Protocol.pointer_Msg == Protocol.TypeMsg.COMMAND_MSG)
+        and (Protocol.msg_command.QUANT_MSG ~= 0) ) then
+        log("The target message to be sent")
+        msg = Protocol.msg_command.MSG[Protocol.msg_command.INDEX_MSG + 1] --start with 0
+
+        
+        if((Protocol.msg_command.INDEX_MSG + 1) 
+            < Protocol.msg_command.QUANT_MSG) then
+            -- we assure that the prox pointer will be the same msg type
+            Protocol.pointer_Msg = Protocol.pointer_Msg - 1; 
+            Protocol.msg_command.INDEX_MSG = Protocol.msg_command.INDEX_MSG + 1
+        else
+            -- when there are not message more to be sent then we restaure         
+            Protocol.msg_command.INDEX_MSG  = 0
+            Protocol.msg_command.QUANT_MSG  = 0
+            Protocol.msg_command.MSG  = {}
+            
+        end
+    else
+        --Protocol.pointer_Msg = Protocol.pointer_Msg + 1;
+    end   
 
     if(Protocol.pointer_Msg >= Protocol.NUM_TYPE_MSG)
          then Protocol.pointer_Msg = 0 end;
@@ -393,5 +584,213 @@ function Protocol.build_unlike_msg(field)
     Protocol.msg_unlike.MSG[Protocol.msg_unlike.QUANT_MSG] = packet; -- add new message
 end
 
+
+
+--- Function that make and store unlike msg
+--- @param data tabla data recived
+function Protocol.decode_unlike_msg(data)
+     if type(data) ~= "table" or #data < 64 then
+        return {valid = false, error = "packet too short or invalid"}
+    end
+
+    local decoded = {
+        valid = true,
+        header = {
+            sender_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.SENDER_ID],
+            type_msg      = data[Protocol.BYTE_UNLIKE_ROBOTS.TYP_MSG],
+            packet_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.PACKET_ID],
+            quant_packets = data[Protocol.BYTE_UNLIKE_ROBOTS.QUANT_PACKETS],
+            index_packet  = data[Protocol.BYTE_UNLIKE_ROBOTS.INDEX_PACKET],
+            target_id     = data[Protocol.BYTE_UNLIKE_ROBOTS.TARGET_ID],
+        }
+    }
+
+    local is_comp = (decoded.header.quant_packets == decoded.header.index_packet)
+    Protocol.rec_msg_unlike[decoded.header.sender_id] = {
+        is_complete = is_comp,
+        msg = decoded
+    }
+
+    
+end
+
+
+
+--- Function that make and store response msg
+--- @param field Table The elements for construction[see BYTE_UNLIKE_ROBOTS]
+function Protocol.build_target_msg(field)
+    local packet = {}
+    for i = 1, 64 do
+        packet[i] = 0
+    end
+
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.SENDER_ID]      = field.sender_id or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.TYP_MSG]        = field.type_msg or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.PACKET_ID]      = field.packet_id or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.QUANT_PACKETS]  = field.quant_packets or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.INDEX_PACKET]   = field.index_packet or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.TARGET_ID]      = field.target_id or 0
+
+
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.LEVEL_CHILDS_1]   = field.level_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.TYPE_CHILD_1]     = field.type_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_1_1]     = field.id_child_1_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_2_1]     = field.id_child_2_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X1_CHILD_1]   = field.pos_x1_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X2_CHILD_1]   = field.pos_x2_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y1_CHILD_1]   = field.pos_y1_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y2_CHILD_1]   = field.pos_y2_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z1_CHILD_1]   = field.pos_z1_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z2_CHILD_1]   = field.pos_z2_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_1_CHILD_1]    = field.yaw_1_child_1 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_2_CHILD_1]    = field.yaw_2_child_1 or 0
+
+    -- CHILD 2 (Índices del 19 al 30)
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.LEVEL_CHILDS_2]   = field.level_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.TYPE_CHILD_2]     = field.type_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_1_2]     = field.id_child_1_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_2_2]    = field.id_child_2_2 or 0 
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X1_CHILD_2]   = field.pos_x1_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X2_CHILD_2]   = field.pos_x2_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y1_CHILD_2]   = field.pos_y1_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y2_CHILD_2]   = field.pos_y2_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z1_CHILD_2]   = field.pos_z1_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z2_CHILD_2]   = field.pos_z2_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_1_CHILD_2]    = field.yaw_1_child_2 or 0
+    packet[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_2_CHILD_2]    = field.yaw_2_child_2 or 0
+
+    -- the message must be accumalate
+    log(string.format("we add a new message with id %i, the total quantity is %i and the current index %i and this will send to %i",
+                     field.packet_id, field.quant_packets, field.index_packet, field.target_id ))
+    Protocol.msg_targraph.QUANT_MSG = Protocol.msg_targraph.QUANT_MSG + 1
+    Protocol.msg_targraph.MSG[Protocol.msg_targraph.QUANT_MSG] = packet; -- add new message
+end
+
+--- func that decode the data and store to the correct variable
+--- @param data tabla data recived
+function Protocol.decode_target_msg(data)
+    if type(data) ~= "table" or #data < 64 then
+        return {valid = false, error = "packet too short or invalid"}
+    end
+
+    local decoded = {
+        valid = true,
+        header = {
+            sender_id     = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.SENDER_ID],
+            type_msg      = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.TYP_MSG],
+            packet_id     = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.PACKET_ID],
+            quant_packets = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.QUANT_PACKETS],
+            index_packet  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.INDEX_PACKET],
+            target_id     = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.TARGET_ID],
+        },
+        payload = {
+            level_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.LEVEL_CHILDS_1],
+            type_child_1  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.TYPE_CHILD_1],
+            id_child_1_1  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_1_1],
+            id_child_2_1  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_2_1],
+            pos_x1_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X1_CHILD_1],
+            pos_x2_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X2_CHILD_1],
+            pos_y1_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y1_CHILD_1],
+            pos_y2_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y2_CHILD_1],
+            pos_z1_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z1_CHILD_1],
+            pos_z2_child_1 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z2_CHILD_1],
+            yaw_1_child_1  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_1_CHILD_1],
+            yaw_2_child_1  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_2_CHILD_1],
+
+            level_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.LEVEL_CHILDS_2],
+            type_child_2  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.TYPE_CHILD_2],
+            id_child_1_2  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_1_2],
+            id_child_2_2  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.ID_CHILD_2_2],
+            pos_x1_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X1_CHILD_2],
+            pos_x2_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_X2_CHILD_2],
+            pos_y1_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y1_CHILD_2],
+            pos_y2_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Y2_CHILD_2],
+            pos_z1_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z1_CHILD_2],
+            pos_z2_child_2 = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.POS_Z2_CHILD_2],
+            yaw_1_child_2  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_1_CHILD_2],
+            yaw_2_child_2  = data[Protocol.BYTE_TARGETGRAPH_ROBOTS.YAW_2_CHILD_2],
+        }
+    }
+
+    local is_comp = (decoded.header.quant_packets == decoded.header.index_packet)
+    local sender_id = decoded.header.sender_id
+    local packet_id = decoded.header.packet_id
+
+    Protocol.rec_msg_targetGraph = Protocol.rec_msg_targetGraph or {}
+    Protocol.rec_msg_targetGraph[sender_id] = Protocol.rec_msg_targetGraph[sender_id] or {}
+    Protocol.rec_msg_targetGraph[sender_id][packet_id] = Protocol.rec_msg_targetGraph[sender_id][packet_id] or { msg = {} }
+
+    Protocol.rec_msg_targetGraph[sender_id][packet_id].is_complete = is_comp
+    table.insert(Protocol.rec_msg_targetGraph[sender_id][packet_id].msg, decoded)
+end
+
+--- Function that make and store command msg
+--- @param field Table The elements for construction
+function Protocol.build_command_msg(field)
+    local packet = {}
+    for i = 1, 64 do
+        packet[i] = 0
+    end
+    
+    packet[Protocol.BYTE_COMMAND_ROBOTS.SENDER_ID]     = field.sender_id or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TYP_MSG]       = field.type_msg or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.PACKET_ID]     = field.packet_id or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.QUANT_PACKETS] = field.quant_packets or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.INDEX_PACKET]  = field.index_packet or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TARGET_ID]     = field.target_id or 0
+
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_X_1]   = field.tar_pos_x_1 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_X_2]   = field.tar_pos_x_2 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Y_1]   = field.tar_pos_y_1 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Y_2]   = field.tar_pos_y_2 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Z_1]   = field.tar_pos_z_1 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Z_2]   = field.tar_pos_z_2 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_YAW_1]     = field.tar_yaw_1 or 0
+    packet[Protocol.BYTE_COMMAND_ROBOTS.TAR_YAW_2]     = field.tar_yaw_2 or 0
+
+    Protocol.msg_command = Protocol.msg_command or { QUANT_MSG = 0, MSG = {} }
+    Protocol.msg_command.QUANT_MSG = Protocol.msg_command.QUANT_MSG + 1
+    Protocol.msg_command.MSG[Protocol.msg_command.QUANT_MSG] = packet
+end
+
+--- Function that decode the data and store to the correct variable
+--- @param data table data received
+function Protocol.decode_command_msg(data)
+    if type(data) ~= "table" or #data < 64 then
+        return {valid = false, error = "packet too short or invalid"}
+    end
+
+    local decoded = {
+        valid = true,
+        header = {
+            sender_id     = data[Protocol.BYTE_COMMAND_ROBOTS.SENDER_ID],
+            type_msg      = data[Protocol.BYTE_COMMAND_ROBOTS.TYP_MSG],
+            packet_id     = data[Protocol.BYTE_COMMAND_ROBOTS.PACKET_ID],
+            quant_packets = data[Protocol.BYTE_COMMAND_ROBOTS.QUANT_PACKETS],
+            index_packet  = data[Protocol.BYTE_COMMAND_ROBOTS.INDEX_PACKET],
+            target_id     = data[Protocol.BYTE_COMMAND_ROBOTS.TARGET_ID],
+        },
+        payload = {
+            tar_pos_x_1 = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_X_1],
+            tar_pos_x_2 = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_X_2],
+            tar_pos_y_1 = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Y_1],
+            tar_pos_y_2 = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Y_2],
+            tar_pos_z_1 = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Z_1],
+            tar_pos_z_2 = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_POS_Z_2],
+            tar_yaw_1   = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_YAW_1],
+            tar_yaw_2   = data[Protocol.BYTE_COMMAND_ROBOTS.TAR_YAW_2],
+        }
+    }
+
+    local is_comp = (decoded.header.quant_packets == decoded.header.index_packet)
+
+    
+    Protocol.rec_msg_command = Protocol.rec_msg_command or {}
+    Protocol.rec_msg_command[decoded.header.sender_id] = {
+            is_complete = is_comp,
+            msg = decoded
+        }
+
+end
 
 return Protocol

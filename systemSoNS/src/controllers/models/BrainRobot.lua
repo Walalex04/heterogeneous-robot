@@ -14,11 +14,11 @@ BrainRobot.Init_graph_target = {
             type = Robot.TypeRobot.DRONE,
             pose = {x = 0.75, y = 0, yaw = 0},
             children = {
-                { id = 31, type = Robot.TypeRobot.QUPA, pose = {x = 1.5, y = 0.5, yaw = 0} },
-                { id = 32, type = Robot.TypeRobot.QUPA, pose = {x = 1.0245, y = 0.1545, yaw = 0} },
-                { id = 33, type = Robot.TypeRobot.QUPA, pose = {x = 1.2061, y = -0.4045, yaw = 0} },
-                { id = 34, type = Robot.TypeRobot.QUPA, pose = {x = 1.7939, y = -0.4045, yaw = 0} },
-                { id = 35, type = Robot.TypeRobot.QUPA, pose = {x = 1.9755, y = 0.1545, yaw = 0} },
+                { id = 111, type = Robot.TypeRobot.QUPA, pose = {x = 1.5, y = 0.5, yaw = 0} },
+                { id = 112, type = Robot.TypeRobot.QUPA, pose = {x = 1.0245, y = 0.1545, yaw = 0} },
+                { id = 113, type = Robot.TypeRobot.QUPA, pose = {x = 1.2061, y = -0.4045, yaw = 0} },
+                { id = 114, type = Robot.TypeRobot.QUPA, pose = {x = 1.7939, y = -0.4045, yaw = 0} },
+                { id = 115, type = Robot.TypeRobot.QUPA, pose = {x = 1.9755, y = 0.1545, yaw = 0} },
             }
         },
         {
@@ -26,11 +26,11 @@ BrainRobot.Init_graph_target = {
             type = Robot.TypeRobot.DRONE,
             pose = {x = -0.75, y = 0, yaw = 0},
             children = {
-                { id = 31, type = Robot.TypeRobot.QUPA, pose = {x = -1.5, y = 0.5, yaw = 0} },
-                { id = 32, type = Robot.TypeRobot.QUPA, pose = {x = -1.0245, y = 0.1545, yaw = 0} },
-                { id = 33, type = Robot.TypeRobot.QUPA, pose = {x = -1.2061, y = -0.4045, yaw = 0} },
-                { id = 34, type = Robot.TypeRobot.QUPA, pose = {x = -1.7939, y = -0.4045, yaw = 0} },
-                { id = 35, type = Robot.TypeRobot.QUPA, pose = {x = -1.9755, y = 0.1545, yaw = 0} },
+                { id = 121, type = Robot.TypeRobot.QUPA, pose = {x = -1.5, y = 0.5, yaw = 0} },
+                { id = 122, type = Robot.TypeRobot.QUPA, pose = {x = -1.0245, y = 0.1545, yaw = 0} },
+                { id = 123, type = Robot.TypeRobot.QUPA, pose = {x = -1.2061, y = -0.4045, yaw = 0} },
+                { id = 124, type = Robot.TypeRobot.QUPA, pose = {x = -1.7939, y = -0.4045, yaw = 0} },
+                { id = 125, type = Robot.TypeRobot.QUPA, pose = {x = -1.9755, y = 0.1545, yaw = 0} },
             }
         }
     }
